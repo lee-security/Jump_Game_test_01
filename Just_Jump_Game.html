@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Jumper - Instructions & Game</title>
+    <style>
+        body {
+            margin: 0; padding: 0;
+            background-color: #f0f0f0;
+            display: flex; justify-content: center; align-items: center;
+            height: 100vh;
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden; touch-action: none;
+        }
+        #game-container {
+            position: relative; width: 100%; max-width: 400px; height: 100%; max-height: 600px;
+            background-color: #c4def6;
+            background-image: linear-gradient(0deg, transparent 24%, rgba(255, 255, 255, .2) 25%, rgba(255, 255, 255, .2) 26%, transparent 27%, transparent 74%, rgba(255, 255, 255, .2) 75%, rgba(255, 255, 255, .2) 76%, transparent 77%, transparent), linear-gradient(90deg, transparent 24%, rgba(255, 255, 255, .2) 25%, rgba(255, 255, 255, .2) 26%, transparent 27%, transparent 74%, rgba(255, 255, 255, .2) 75%, rgba(255, 255, 255, .2) 76%, transparent 77%, transparent);
+            background-size: 50px 50px;
+            border: 2px solid #333; border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3); overflow: hidden;
+        }
+        canvas { display: block; width: 100%; height: 100%; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        #score-board { padding: 15px; font-size: 24px; font-weight: 800; color: #2c3e50; text-shadow: 1px 1px 0 white; }
+        
+        /* Overlay and Menu Styles */
+        #overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex; flex-direction: column; justify-content: space-between;
+            align-items: center; color: white; z-index: 10; padding: 40px 20px; box-sizing: border-box;
+            text-align: center;
+        }
+        .menu-section { width: 100%; display: flex; flex-direction: column; align-items: center; }
+        
+        /* Guide Styles */
+        #guide-container {
+            background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(5px);
+            padding: 20px; border-radius: 15px; width: 90%; position: relative;
+            min-height: 180px; display: flex; flex-direction: column; justify-content: center;
+        }
+        .nav-btn {
+            position: absolute; top: 50%; transform: translateY(-50%);
+            background: #2ed573; border: none; color: white; width: 40px; height: 40px;
+            border-radius: 50%; cursor: pointer; font-weight: bold; pointer-events: auto;
+            display: flex; align-items: center; justify-content: center; font-size: 20px;
+        }
+        .nav-btn:hover { background: #26de81; }
+        .nav-left { left: -15px; }
+        .nav-right { right: -15px; }
+        
+        .guide-page { display: none; }
+        .guide-page.active { display: block; animation: fadeIn 0.3s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .btn {
+            padding: 15px 20px; font-size: 20px; font-weight: bold; color: white;
+            background-color: #2ed573; border: none; border-radius: 50px;
+            cursor: pointer; box-shadow: 0 5px 15px rgba(46, 213, 115, 0.4);
+            transition: transform 0.2s, background-color 0.2s; pointer-events: auto;
+            width: 260px; /* 버튼 너비를 한 줄에 맞게 확장 */
+            white-space: nowrap; /* 텍스트 줄바꿈 방지 */
+        }
+        .btn:hover { transform: scale(1.05); background-color: #26de81; }
+        .btn-secondary { background-color: #747d8c; font-size: 16px; padding: 10px 20px; margin-top: 10px; width: 260px; }
+        .btn-secondary:hover { background-color: #57606f; }
+
+        /* 광고 보고 이어하기 버튼 스타일 */
+        .btn-ad {
+            background: linear-gradient(135deg, #f1c40f, #f39c12);
+            box-shadow: 0 5px 15px rgba(241, 196, 15, 0.4);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .btn-ad:hover { background: linear-gradient(135deg, #f39c12, #e67e22); }
+        .btn-ad svg { width: 22px; height: 22px; fill: white; flex-shrink: 0; }
+
+        /* 광고 로딩 오버레이 */
+        #ad-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: none; flex-direction: column; justify-content: center;
+            align-items: center; z-index: 100; color: white;
+        }
+        .loader-bar {
+            width: 200px; height: 10px; background: #333;
+            border-radius: 5px; margin-top: 20px; overflow: hidden;
+        }
+        .loader-progress {
+            width: 0%; height: 100%; background: #f1c40f;
+            transition: width 2s linear;
+        }
+
+        #countdown { font-size: 100px; font-weight: 900; position: absolute; top: 40%; display: none; }
+        h1 { margin: 0 0 10px 0; font-size: 36px; color: #2ed573; text-shadow: 2px 2px 0 #fff; }
+        p { font-size: 17px; line-height: 1.5; margin: 0; }
+        .hint { font-size: 12px; color: #ced4da; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+        <div id="ui-layer"><div id="score-board">Score: <span id="score">0</span></div></div>
+
+        <div id="overlay">
+            <div id="main-menu" class="menu-section">
+                <h1>JUMPER</h1>
+                <div id="guide-container">
+                    <button class="nav-btn nav-left" onclick="changePage(-1)">&lt;</button>
+                    <button class="nav-btn nav-right" onclick="changePage(1)">&gt;</button>
+                    
+                    <div class="guide-page active" data-index="0">
+                        <h3>1. 조작 방법</h3>
+                        <p><b>[A] [D]</b> 또는 <b>[방향키]</b>로 이동!<br>모바일은 화면 <b>좌/우</b>를 터치하세요.</p>
+                    </div>
+                    <div class="guide-page" data-index="1">
+                        <h3>2. 게임 목표</h3>
+                        <p>캐릭터는 자동으로 점프합니다!<br>발판을 밟아 끊임없이 위로 올라가세요.<br>높이 갈수록 점수가 높아집니다.</p>
+                        
+                    </div>
+                    <div class="guide-page" data-index="2">
+                        <h3>3. 교차 이동</h3>
+                        <p>화면 왼쪽 끝으로 나가면<br>오른쪽 끝에서 나타납니다!<br>이동 경로를 전략적으로 선택하세요.</p>
+                    </div>
+                </div>
+                <p class="hint">화살표 키나 A/D로 가이드를 넘길 수 있습니다.</p>
+            </div>
+
+            <!-- 게임 오버 및 버튼 그룹 통합 정렬 -->
+            <div id="game-over-content" class="menu-section" style="display: none;">
+                <h1>Game Over</h1>
+                <p style="margin-bottom: 20px;">최종 점수: <span id="final-score">0</span></p>
+            </div>
+
+            <div class="menu-section" style="gap: 10px;">
+                <!-- 광고 버튼: 텍스트가 잘리지 않도록 너비를 조절함 -->
+                <button id="ad-btn" class="btn btn-ad" style="display:none;" onclick="watchAd()">
+                    <svg viewBox="0 0 24 24"><path d="M7 6v12l10-6z"/></svg>
+                    <span>광고 보고 이어하기</span>
+                </button>
+                
+                <button id="start-btn" class="btn" onclick="requestStart()">START GAME</button>
+                <button id="home-btn" class="btn btn-secondary" style="display:none;" onclick="showMainMenu()">메인으로 돌아가기</button>
+                
+                <p class="hint" id="start-hint" style="margin-top: 15px;">Space 또는 Enter로 시작 가능</p>
+            </div>
+            
+            <div id="countdown">3</div>
+        </div>
+
+        <!-- 광고 시뮬레이션 레이어 -->
+        <div id="ad-overlay">
+            <h3>광고 시청 중...</h3>
+            <div class="loader-bar"><div id="ad-progress" class="loader-progress"></div></div>
+            <p style="font-size: 12px; margin-top: 10px; color: #aaa;">잠시 후 게임이 재개됩니다.</p>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const finalScoreElement = document.getElementById('final-score');
+        const overlay = document.getElementById('overlay');
+        const mainMenu = document.getElementById('main-menu');
+        const gameOverContent = document.getElementById('game-over-content');
+        const countdownElement = document.getElementById('countdown');
+        const adOverlay = document.getElementById('ad-overlay');
+        const adProgress = document.getElementById('ad-progress');
+        const startBtn = document.getElementById('start-btn');
+        const homeBtn = document.getElementById('home-btn');
+        const adBtn = document.getElementById('ad-btn');
+        const startHint = document.getElementById('start-hint');
+
+        let CANVAS_WIDTH = 400;
+        let CANVAS_HEIGHT = 600;
+        let gameLoop;
+        let isGameOver = false;
+        let isPaused = true; 
+        let score = 0;
+        let currentPage = 0;
+        const totalPages = 3;
+        
+        const keys = {};
+        let isTouching = false;
+        let touchX = 0;
+
+        const player = {
+            x: 0, y: 0, width: 35, height: 35, vx: 0, vy: 0,
+            speed: 4.5, 
+            jumpStrength: -7.2, 
+            gravity: 0.16,      
+            color: '#ff4757',
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath(); ctx.roundRect(this.x, this.y, this.width, this.height, 8); ctx.fill();
+                ctx.fillStyle = 'white';
+                ctx.beginPath(); ctx.arc(this.x + 10, this.y + 12, 5, 0, Math.PI * 2); ctx.arc(this.x + 25, this.y + 12, 5, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = 'black';
+                let look = this.vx > 0 ? 2 : (this.vx < 0 ? -2 : 0);
+                ctx.beginPath(); ctx.arc(this.x + 10 + look, this.y + 12, 2.5, 0, Math.PI * 2); ctx.arc(this.x + 25 + look, this.y + 12, 2.5, 0, Math.PI * 2); ctx.fill();
+            },
+            update() {
+                this.vy += this.gravity;
+                this.y += this.vy;
+                this.x += this.vx;
+                if (this.x > CANVAS_WIDTH) this.x = -this.width;
+                else if (this.x + this.width < 0) this.x = CANVAS_WIDTH;
+            }
+        };
+
+        let platforms = [];
+        class Platform {
+            constructor(x, y, type = 'normal', width = 70) {
+                this.x = x; this.y = y; this.width = width; this.height = 15;
+                this.type = type; this.broken = false;
+                if (this.type === 'moving') this.speed = (Math.random() * 0.3 + 0.1) * (Math.random() > 0.5 ? 1 : -1);
+            }
+            draw() {
+                if (this.broken) return;
+                ctx.fillStyle = this.type === 'base' ? '#747d8c' : (this.type === 'moving' ? '#1e90ff' : (this.type === 'fragile' ? '#ffa502' : '#2ed573'));
+                ctx.beginPath(); ctx.roundRect(this.x, this.y, this.width, this.height, 6); ctx.fill();
+            }
+            update() {
+                if (this.type === 'moving') {
+                    this.x += this.speed;
+                    if (this.x < 0 || this.x + this.width > CANVAS_WIDTH) this.speed *= -1;
+                }
+            }
+        }
+
+        function changePage(dir) {
+            const pages = document.querySelectorAll('.guide-page');
+            pages[currentPage].classList.remove('active');
+            currentPage = (currentPage + dir + totalPages) % totalPages;
+            pages[currentPage].classList.add('active');
+        }
+
+        function showMainMenu() {
+            isGameOver = false;
+            isPaused = true;
+            overlay.style.display = 'flex';
+            mainMenu.style.display = 'flex';
+            gameOverContent.style.display = 'none';
+            adBtn.style.display = 'none'; 
+            homeBtn.style.display = 'none';
+            startBtn.style.display = 'block';
+            startBtn.innerText = "START GAME";
+            startHint.innerText = "Space 또는 Enter로 시작 가능";
+        }
+
+        function resizeCanvas() {
+            const container = document.getElementById('game-container');
+            CANVAS_WIDTH = container.clientWidth; CANVAS_HEIGHT = container.clientHeight;
+            canvas.width = CANVAS_WIDTH; canvas.height = CANVAS_HEIGHT;
+        }
+
+        function generatePlatforms() {
+            platforms = [];
+            platforms.push(new Platform(0, CANVAS_HEIGHT - 40, 'base', CANVAS_WIDTH));
+            let currentY = CANVAS_HEIGHT - 180; 
+            while (currentY > -CANVAS_HEIGHT) {
+                const x = Math.random() * (CANVAS_WIDTH - 70);
+                platforms.push(new Platform(x, currentY));
+                currentY -= (110 + Math.random() * 50);
+            }
+        }
+
+        function requestStart() {
+            if (!isPaused && !isGameOver) return;
+            mainMenu.style.display = 'none';
+            gameOverContent.style.display = 'none';
+            adBtn.style.display = 'none'; 
+            startBtn.style.display = 'none';
+            homeBtn.style.display = 'none';
+            startHint.style.display = 'none';
+            countdownElement.style.display = 'block';
+            
+            let count = 3;
+            countdownElement.innerText = count;
+            const timer = setInterval(() => {
+                count--;
+                if (count > 0) countdownElement.innerText = count;
+                else if (count === 0) countdownElement.innerText = "GO!";
+                else {
+                    clearInterval(timer);
+                    countdownElement.style.display = 'none';
+                    overlay.style.display = 'none';
+                    startGame();
+                }
+            }, 700);
+        }
+
+        function startGame() {
+            resizeCanvas();
+            score = 0; scoreElement.innerText = score;
+            isGameOver = false; isPaused = false;
+            player.x = CANVAS_WIDTH / 2 - player.width / 2;
+            player.y = CANVAS_HEIGHT - 100;
+            player.vx = 0; player.vy = 0;
+            generatePlatforms();
+            if (gameLoop) cancelAnimationFrame(gameLoop);
+            loop();
+        }
+
+        function update() {
+            if (isGameOver || isPaused) return;
+            if (keys.ArrowLeft || keys.KeyA || (isTouching && touchX < CANVAS_WIDTH / 2)) player.vx = -player.speed;
+            else if (keys.ArrowRight || keys.KeyD || (isTouching && touchX >= CANVAS_WIDTH / 2)) player.vx = player.speed;
+            else player.vx = 0;
+
+            player.update();
+
+            if (player.y < CANVAS_HEIGHT * 0.4) {
+                let diff = (CANVAS_HEIGHT * 0.4) - player.y;
+                player.y = CANVAS_HEIGHT * 0.4;
+                score += Math.floor(diff);
+                scoreElement.innerText = score;
+                platforms.forEach(p => p.y += diff);
+            }
+
+            if (player.vy > 0) {
+                for (let p of platforms) {
+                    if (!p.broken && player.x + player.width > p.x && player.x < p.x + p.width && 
+                        player.y + player.height > p.y && player.y + player.height < p.y + p.height + player.vy + 2) {
+                        player.y = p.y - player.height;
+                        if (p.type === 'fragile') { p.broken = true; player.vy = player.jumpStrength * 0.5; }
+                        else player.vy = player.jumpStrength;
+                        break;
+                    }
+                }
+            }
+
+            for (let i = platforms.length - 1; i >= 0; i--) {
+                platforms[i].update();
+                if (platforms[i].y > CANVAS_HEIGHT) {
+                    platforms.splice(i, 1);
+                    let hY = CANVAS_HEIGHT;
+                    platforms.forEach(plat => { if(plat.y < hY) hY = plat.y; });
+                    let type = Math.random() > 0.8 ? 'moving' : 'normal';
+                    platforms.push(new Platform(Math.random() * (CANVAS_WIDTH - 70), hY - (110 + Math.random() * 40), type));
+                }
+            }
+            if (player.y > CANVAS_HEIGHT) endGame();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            platforms.forEach(p => p.draw());
+            player.draw();
+        }
+
+        function loop() {
+            if (!isGameOver) { update(); draw(); gameLoop = requestAnimationFrame(loop); }
+        }
+
+        function endGame() {
+            isGameOver = true; isPaused = true;
+            finalScoreElement.innerText = score;
+            overlay.style.display = 'flex';
+            gameOverContent.style.display = 'block';
+            adBtn.style.display = 'flex';
+            startBtn.style.display = 'block';
+            startBtn.innerText = "처음부터 다시하기";
+            homeBtn.style.display = 'block';
+            startHint.style.display = 'block';
+            startHint.innerText = "Space/Enter: 재시작, R: 즉시 재시작";
+        }
+
+        function watchAd() {
+            adOverlay.style.display = 'flex';
+            adProgress.style.width = '0%';
+            setTimeout(() => { adProgress.style.width = '100%'; }, 50);
+            setTimeout(() => {
+                adOverlay.style.display = 'none';
+                adBtn.style.display = 'none'; 
+                revivePlayer();
+            }, 2050);
+        }
+
+        function revivePlayer() {
+            isGameOver = false;
+            isPaused = false;
+            overlay.style.display = 'none';
+            player.x = CANVAS_WIDTH / 2 - player.width / 2;
+            player.y = CANVAS_HEIGHT / 2;
+            player.vy = player.jumpStrength; 
+            if (gameLoop) cancelAnimationFrame(gameLoop);
+            loop();
+        }
+
+        window.addEventListener('keydown', e => {
+            keys[e.code] = true;
+            if (isPaused && !isGameOver) {
+                if (e.code === 'ArrowLeft' || e.code === 'KeyA') changePage(-1);
+                if (e.code === 'ArrowRight' || e.code === 'KeyD') changePage(1);
+            }
+            if ((e.code === 'Space' || e.code === 'Enter') && (isPaused || isGameOver)) requestStart();
+            if (e.code === 'KeyR' && isGameOver) requestStart();
+        });
+        window.addEventListener('keyup', e => keys[e.code] = false);
+        canvas.addEventListener('touchstart', e => {
+            isTouching = true;
+            touchX = e.touches[0].clientX - canvas.getBoundingClientRect().left;
+            e.preventDefault();
+        }, {passive: false});
+        canvas.addEventListener('touchend', () => isTouching = false);
+        window.addEventListener('resize', resizeCanvas);
+
+        window.onload = function() {
+            resizeCanvas();
+            generatePlatforms();
+            player.x = CANVAS_WIDTH / 2 - player.width / 2;
+            player.y = CANVAS_HEIGHT - 100;
+            draw();
+        };
+    </script>
+</body>
+</html>
